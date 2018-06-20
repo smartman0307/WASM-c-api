@@ -10,20 +10,20 @@
 // Print a Wasm value
 void wasm_val_print(wasm_val_t val) {
   switch (val.kind) {
-    case WASM_I32: {
+    case WASM_I32_VAL: {
       printf("%" PRIu32, val.of.i32);
     } break;
-    case WASM_I64: {
+    case WASM_I64_VAL: {
       printf("%" PRIu64, val.of.i64);
     } break;
-    case WASM_F32: {
+    case WASM_F32_VAL: {
       printf("%f", val.of.f32);
     } break;
-    case WASM_F64: {
+    case WASM_F64_VAL: {
       printf("%g", val.of.f64);
     } break;
-    case WASM_ANYREF:
-    case WASM_FUNCREF: {
+    case WASM_ANYREF_VAL:
+    case WASM_FUNCREF_VAL: {
       if (val.of.ref == NULL) {
         printf("null");
       } else {

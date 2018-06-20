@@ -581,7 +581,6 @@ public:
   auto copy() const -> own<Extern*>;
 
   auto kind() const -> ExternKind;
-  auto type() const -> own<ExternType*>;
 
   auto func() -> Func*;
   auto global() -> Global*;
@@ -652,9 +651,9 @@ public:
 
   auto type() const -> own<TableType*>;
   auto get(size_t index) const -> own<Ref*>;
-  auto set(size_t index, const own<Ref*>&) -> bool;
+  void set(size_t index, const own<Ref*>&);
   auto size() const -> size_t;
-  auto grow(size_t delta) -> bool;
+  auto grow(size_t delta) -> size_t;
 };
 
 
@@ -676,7 +675,7 @@ public:
   auto data() const -> byte_t*;
   auto data_size() const -> size_t;
   auto size() const -> pages_t;
-  auto grow(pages_t delta) -> bool;
+  auto grow(pages_t delta) -> pages_t;
 };
 
 

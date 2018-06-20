@@ -383,7 +383,7 @@ wasm_tabletype_t* wasm_tabletype_new(
   return release(TableType::make(adopt(element), reveal(*limits)));
 }
 
-const wasm_valtype_t* wasm_tabletype_element(const wasm_tabletype_t* tt) {
+const wasm_valtype_t* wasm_tabletype_elem(const wasm_tabletype_t* tt) {
   return get(tt->element());
 }
 
@@ -408,10 +408,6 @@ const wasm_limits_t* wasm_memorytype_limits(const wasm_memorytype_t* mt) {
 // Extern Types
 
 WASM_DEFINE_TYPE(externtype, ExternType)
-
-wasm_externkind_t wasm_externtype_kind(const wasm_externtype_t* et) {
-  return hide(et->kind());
-}
 
 wasm_externtype_t* wasm_functype_as_externtype(wasm_functype_t* ft) {
   return hide(static_cast<ExternType*>(ft));
@@ -487,6 +483,10 @@ const wasm_memorytype_t* wasm_externtype_as_memorytype_const(
 ) {
   return et->kind() == EXTERN_MEMORY
     ? hide(static_cast<const MemoryType*>(reveal(et))) : nullptr;
+}
+
+wasm_externkind_t wasm_externtype_kind(const wasm_externtype_t* et) {
+  return hide(et->kind());
 }
 
 
@@ -877,18 +877,20 @@ wasm_ref_t* wasm_table_get(const wasm_table_t* table, wasm_table_size_t index) {
   return release(table->get(index));
 }
 
-bool wasm_table_set(
+void wasm_table_set(
   wasm_table_t* table, wasm_table_size_t index, wasm_ref_t* ref
 ) {
   auto ref_ = borrow(ref);
-  return table->set(index, ref_.it);
+  table->set(index, ref_.it);
 }
 
 wasm_table_size_t wasm_table_size(const wasm_table_t* table) {
   return table->size();
 }
 
-bool wasm_table_grow(wasm_table_t* table, wasm_table_size_t delta) {
+wasm_table_size_t wasm_table_grow(
+  wasm_table_t* table, wasm_table_size_t delta
+) {
   return table->grow(delta);
 }
 
@@ -921,7 +923,9 @@ wasm_memory_pages_t wasm_memory_size(const wasm_memory_t* memory) {
   return memory->size();
 }
 
-bool wasm_memory_grow(wasm_memory_t* memory, wasm_memory_pages_t delta) {
+wasm_memory_pages_t wasm_memory_grow(
+  wasm_memory_t* memory, wasm_memory_pages_t delta
+) {
   return memory->grow(delta);
 }
 
@@ -930,13 +934,6 @@ bool wasm_memory_grow(wasm_memory_t* memory, wasm_memory_pages_t delta) {
 
 WASM_DEFINE_REF(extern, Extern)
 WASM_DEFINE_VEC(extern, Extern, *)
-
-wasm_externkind_t wasm_extern_kind(const wasm_extern_t* external) {
-  return hide(external->kind());
-}
-wasm_externtype_t* wasm_extern_type(const wasm_extern_t* external) {
-  return release(external->type());
-}
 
 wasm_extern_t* wasm_func_as_extern(wasm_func_t* func) {
   return hide(static_cast<Extern*>(reveal(func)));
@@ -988,6 +985,10 @@ const wasm_table_t* wasm_extern_as_table_const(const wasm_extern_t* external) {
 }
 const wasm_memory_t* wasm_extern_as_memory_const(const wasm_extern_t* external) {
   return hide(external->memory());
+}
+
+wasm_externkind_t wasm_extern_kind(const wasm_extern_t* external) {
+  return hide(external->kind());
 }
 
 
