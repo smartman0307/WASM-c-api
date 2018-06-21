@@ -1,4 +1,4 @@
-CFLAGS = -ggdb -O0
+CFLAGS = -ggdb
 CXXFLAGS = ${CFLAGS} -fsanitize=address
 LDFLAGS = -fsanitize-memory-track-origins -fsanitize-memory-use-after-dtor
 
@@ -7,7 +7,7 @@ WASM_DIR = .
 EXAMPLE_DIR = example
 
 EXAMPLE_OUT = ${OUT_DIR}/${EXAMPLE_DIR}
-EXAMPLES = hello callback trap reflect global
+EXAMPLES = hello callback trap reflect
 
 V8_VERSION = branch-heads/6.8
 V8_ARCH = x64

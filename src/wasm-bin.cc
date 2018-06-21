@@ -6,11 +6,6 @@ namespace bin {
 ////////////////////////////////////////////////////////////////////////////////
 // Encoding
 
-void encode_header(char*& ptr) {
-  memcpy(ptr, "\x00""asm\x01\x00\x00\x00", 8);
-  ptr += 8;
-}
-
 void encode_u32(char*& ptr, size_t n) {
   for (int i = 0; i < 5; ++i) {
     *ptr++ = (n & 0x7f) | (i == 4 ? 0x00 : 0x80);
@@ -18,41 +13,17 @@ void encode_u32(char*& ptr, size_t n) {
   }
 }
 
-void encode_valtype(char*& ptr, const ValType* type) {
+auto valtype_to_byte(const ValType* type) -> byte_t {
   switch (type->kind()) {
-    case I32: *ptr++ = 0x7f; break;
-    case I64: *ptr++ = 0x7e; break;
-    case F32: *ptr++ = 0x7d; break;
-    case F64: *ptr++ = 0x7c; break;
-    case FUNCREF: *ptr++ = 0x70; break;
-    case ANYREF: *ptr++ = 0x6f; break;
-    default: assert(false);
+    case I32: return 0x7f;
+    case I64: return 0x7e;
+    case F32: return 0x7d;
+    case F64: return 0x7c;
+    case FUNCREF: return 0x70;
+    case ANYREF: return 0x6f;
   }
+  assert(false);
 }
-
-auto zero_size(const ValType* type) -> size_t {
-  switch (type->kind()) {
-    case I32: return 1;
-    case I64: return 1;
-    case F32: return 4;
-    case F64: return 8;
-    case FUNCREF: return 0;
-    case ANYREF: return 0;
-    default: assert(false);
-  }
-}
-
-void encode_const_zero(char*& ptr, const ValType* type) {
-  switch (type->kind()) {
-    case I32: *ptr++ = 0x41; break;
-    case I64: *ptr++ = 0x42; break;
-    case F32: *ptr++ = 0x43; break;
-    case F64: *ptr++ = 0x44; break;
-    default: assert(false);
-  }
-  for (int i = 0; i < zero_size(type); ++i) *ptr++ = 0;
-}
-
 
 auto wrapper(const own<FuncType*>& type) -> vec<byte_t> {
   auto in_arity = type->params().size();
@@ -61,7 +32,8 @@ auto wrapper(const own<FuncType*>& type) -> vec<byte_t> {
   auto binary = vec<byte_t>::make_uninitialized(size);
   auto ptr = binary.get();
 
-  encode_header(ptr);
+  memcpy(ptr, "\x00""asm\x01\x00\x00\x00", 8);
+  ptr += 8;
 
   *ptr++ = 0x01;  // type section
   encode_u32(ptr, 12 + in_arity + out_arity);  // size
@@ -69,11 +41,11 @@ auto wrapper(const own<FuncType*>& type) -> vec<byte_t> {
   *ptr++ = 0x60;  // function
   encode_u32(ptr, in_arity);
   for (size_t i = 0; i < in_arity; ++i) {
-    encode_valtype(ptr, type->params()[i].get());
+    *ptr++ = valtype_to_byte(type->params()[i].get());
   }
   encode_u32(ptr, out_arity);
   for (size_t i = 0; i < out_arity; ++i) {
-    encode_valtype(ptr, type->results()[i].get());
+    *ptr++ = valtype_to_byte(type->results()[i].get());
   }
 
   *ptr++ = 0x02;  // import section
@@ -95,32 +67,6 @@ auto wrapper(const own<FuncType*>& type) -> vec<byte_t> {
   return binary;
 }
 
-auto wrapper(const own<GlobalType*>& type) -> vec<byte_t> {
-  auto size = 25 + zero_size(type->content().get());
-  auto binary = vec<byte_t>::make_uninitialized(size);
-  auto ptr = binary.get();
-
-  encode_header(ptr);
-
-  *ptr++ = 0x06;  // global section
-  encode_u32(ptr, 5 + zero_size(type->content().get()));  // size
-  *ptr++ = 1;  // length
-  encode_valtype(ptr, type->content().get());
-  *ptr++ = (type->mutability() == VAR);
-  encode_const_zero(ptr, type->content().get());
-  *ptr++ = 0x0b;  // end
-
-  *ptr++ = 0x07;  // export section
-  *ptr++ = 4;  // size
-  *ptr++ = 1;  // length
-  *ptr++ = 0;  // name length
-  *ptr++ = 0x03;  // global
-  *ptr++ = 0;  // func index
-
-  assert(ptr - binary.get() == size);
-  return binary;
-}
-
 
 ////////////////////////////////////////////////////////////////////////////////
 // Decoding
@@ -133,7 +79,7 @@ auto u32(const byte_t*& pos) -> uint32_t {
   byte_t b;
   do {
     b = *pos++;
-    n += (b & 0x7f) << shift;
+    n += (b & 0x7f) >> shift;
     shift += 7;
   } while ((b & 0x80) != 0);
   return n;
@@ -294,18 +240,6 @@ enum sec_t : byte_t {
 auto section(const vec<byte_t>& binary, bin::sec_t sec) -> const byte_t* {
   const byte_t* end = binary.get() + binary.size();
   const byte_t* pos = binary.get() + 8;  // skip header
-  while (pos < end && *pos++ != sec) {
-    auto size = bin::u32(pos);
-    pos += size;
-  }
-  if (pos == end) return nullptr;
-  bin::u32_skip(pos);
-  return pos;
-}
-
-auto section_end(const vec<byte_t>& binary, bin::sec_t sec) -> const byte_t* {
-  const byte_t* end = binary.get() + binary.size();
-  const byte_t* pos = binary.get() + 8;  // skip header
   while (pos < end && *pos != sec) {
     ++pos;
     auto size = bin::u32(pos);
@@ -313,8 +247,8 @@ auto section_end(const vec<byte_t>& binary, bin::sec_t sec) -> const byte_t* {
   }
   if (pos == end) return nullptr;
   ++pos;
-  auto size = bin::u32(pos);
-  return pos + size;
+  bin::u32_skip(pos);
+  return pos;
 }
 
 
@@ -329,7 +263,6 @@ auto types(const vec<byte_t>& binary) -> vec<FuncType*> {
   for (uint32_t i = 0; i < size; ++i) {
     v[i] = bin::functype(pos);
   }
-  assert(pos = bin::section_end(binary, SEC_TYPE));
   return v;
 }
 
@@ -357,7 +290,6 @@ auto imports(
     v[i] = ImportType::make(
       std::move(module), std::move(name), std::move(type));
   }
-  assert(pos = bin::section_end(binary, SEC_IMPORT));
   return v;
 }
 
@@ -391,7 +323,6 @@ auto funcs(
     for (; j < v.size(); ++j) {
       v[j] = types[bin::u32(pos)]->copy();
     }
-    assert(pos = bin::section_end(binary, SEC_FUNC));
   }
   return v;
 }
@@ -416,9 +347,7 @@ auto globals(
   if (pos != nullptr) {
     for (; j < v.size(); ++j) {
       v[j] = bin::globaltype(pos);
-      expr_skip(pos);
     }
-    assert(pos = bin::section_end(binary, SEC_GLOBAL));
   }
   return v;
 }
@@ -444,7 +373,6 @@ auto tables(
     for (; j < v.size(); ++j) {
       v[j] = bin::tabletype(pos);
     }
-    assert(pos = bin::section_end(binary, SEC_TABLE));
   }
   return v;
 }
@@ -470,7 +398,6 @@ auto memories(
     for (; j < v.size(); ++j) {
       v[j] = bin::memorytype(pos);
     }
-    assert(pos = bin::section_end(binary, SEC_MEMORY));
   }
   return v;
 }
@@ -482,25 +409,26 @@ auto exports(const vec<byte_t>& binary,
   const vec<FuncType*>& funcs, const vec<GlobalType*>& globals,
   const vec<TableType*>& tables, const vec<MemoryType*>& memories
 ) -> vec<ExportType*> {
+  auto exports = vec<ExportType*>::make();
   auto pos = bin::section(binary, SEC_EXPORT);
-  if (pos == nullptr) return vec<ExportType*>::make();
-  size_t size = bin::u32(pos);
-  auto exports = vec<ExportType*>::make_uninitialized(size);
-  for (uint32_t i = 0; i < size; ++i) {
-    auto name = bin::name(pos);
-    auto tag = *pos++;
-    auto index = bin::u32(pos);
-    own<ExternType*> type;
-    switch (tag) {
-      case 0x00: type = funcs[index]->copy(); break;
-      case 0x01: type = tables[index]->copy(); break;
-      case 0x02: type = memories[index]->copy(); break;
-      case 0x03: type = globals[index]->copy(); break;
-      default: assert(false);
+  if (pos != nullptr) {
+    size_t size = bin::u32(pos);
+    exports = vec<ExportType*>::make_uninitialized(size);
+    for (uint32_t i = 0; i < size; ++i) {
+      auto name = bin::name(pos);
+      auto tag = *pos++;
+      auto index = bin::u32(pos);
+      own<ExternType*> type;
+      switch (tag) {
+        case 0x00: type = funcs[index]->copy(); break;
+        case 0x01: type = tables[index]->copy(); break;
+        case 0x02: type = memories[index]->copy(); break;
+        case 0x03: type = globals[index]->copy(); break;
+        default: assert(false);
+      }
+      exports[i] = ExportType::make(std::move(name), std::move(type));
     }
-    exports[i] = ExportType::make(std::move(name), std::move(type));
   }
-  assert(pos = bin::section_end(binary, SEC_EXPORT));
   return exports;
 }
 
